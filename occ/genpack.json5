@@ -1,0 +1,13 @@
+// theme: occ
+// Nextcloud/ownCloud の occ CLI を適切な権限で実行するための setuid ラッパーを
+// shimarin/occ からダウンロード・コンパイルして /usr/bin/occ にインストールする
+// 依存: なし
+// 競合するキー: buildtime_packages(sys-devel/gcc)
+// 備考: ソース: https://github.com/shimarin/occ
+//       PHP パスやスクリプトパスをデフォルトから変える場合は
+//       occ.sh 内の gcc コマンドに -DSCRIPT='"..."' 等を追加すること
+{
+  buildtime_packages: [
+    "sys-devel/gcc",
+  ],
+}

@@ -1,0 +1,39 @@
+// theme: obs-plugins
+// OBS Studioと、Portageに存在しないプラグインをGitHubからインストールする
+// 依存: なし
+// 競合するキー: packages(media-video/obs-studio), use(media-video/obs-studio),
+//               accept_keywords(obs-studio関連), buildtime_packages(deb2targz)
+// 備考: Portageにあるプラグイン(obs-pipewire-audio-capture等)は通常のpackagesに追加すること。
+//       GitHubからインストールするプラグインは files/build.d/ 以下のスクリプトが担う。
+//       使用するスクリプトだけ build.d にコピーして取り込む。
+{
+  packages: [
+    "media-video/obs-studio",
+    // Portageにあるプラグイン例(必要なものを選択):
+    // "media-plugins/obs-pipewire-audio-capture",
+    // "media-plugins/obs-source-record",
+    // "media-plugins/obs-3d-effect",
+    // "media-plugins/obs-scale-to-sound",
+    // "media-plugins/obs-composite-blur",
+    // for obs-studio(https://bugs.gentoo.org/959751)
+    "kde-frameworks/extra-cmake-modules",
+  ],
+  buildtime_packages: [
+    "app-arch/deb2targz", // for .deb-based plugin installation
+  ],
+  accept_keywords: {
+    "media-video/obs-studio": null,
+    "net-libs/mbedtls": null,
+    "dev-libs/qr-code-generator": null,
+    // Portageプラグインを使う場合は各プラグインのaccept_keywordsも追加:
+    // "media-plugins/obs-pipewire-audio-capture": null,
+    // "media-plugins/obs-source-record": null,
+    // "media-plugins/obs-3d-effect": null,
+    // "media-plugins/obs-scale-to-sound": null,
+    // "media-plugins/obs-composite-blur": null,
+  },
+  use: {
+    // nvenc: NVIDIA, qsv: Intel QSV。不要なら外す
+    "media-video/obs-studio": "browser pipewire python v4l vlc websocket nvenc qsv",
+  },
+}

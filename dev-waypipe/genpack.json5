@@ -1,0 +1,41 @@
+// theme: dev-waypipe
+// waypipe SSH経由でGUIアプリを転送できる開発環境variantを追加する
+// genpack/devlauncher がログイン時に開発ツール群を起動する仕組みを提供する
+// 依存: なし
+// 競合するキー: variants.dev, use(各パッケージのwayland/Xフラグ)
+// 注意: circulardep_breaker がトップレベルや同じvariantに既に定義されている場合、
+//       単純に上書きすると既存エントリが失われる。その場合は packages リストと
+//       use フラグを既存定義に手動でマージすること。
+// 備考: Wayland専用を意図した構成だが、use に X フラグが含まれているのは
+//       www-client/google-chrome が X 関連ライブラリを要求するため。
+//       Chrome を含まない構成では "x11-libs/cairo": "X" および
+//       "media-libs/libglvnd": "X" は省略できる。
+{
+  variants: {
+    dev: {
+      packages: ["genpack/devlauncher"],
+      use: {
+        "app-editors/vscode": "wayland",
+        "dev-util/claude-code": "CPU_FLAGS_X86: avx avx2",
+        "gui-libs/gtk": "wayland",
+        "x11-libs/gtk+": "wayland",
+        "media-libs/mesa": "vulkan wayland",
+        "x11-libs/cairo": "X",           // Chrome が X 対応 cairo を要求するため
+        "media-libs/libglvnd": "X",      // 同上
+        "media-libs/freetype": "harfbuzz",
+        "app-crypt/gcr": "gtk",
+        "app-text/poppler": "cairo",
+        "gui-apps/waypipe": "lz4 zstd",
+      },
+      circulardep_breaker: {
+        packages: ["media-libs/freetype", "media-libs/harfbuzz"],
+        use: "-harfbuzz -truetype",
+      },
+      license: {
+        "www-client/google-chrome": "google-chrome",
+        "dev-util/claude-code": "all-rights-reserved",
+        "app-editors/vscode": "Microsoft-vscode",
+      },
+    },
+  },
+}

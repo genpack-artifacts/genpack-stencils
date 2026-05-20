@@ -1,0 +1,20 @@
+// theme: srs
+// SRS (Simple Realtime Server) をソースからビルドしてインストールする
+// RTMP/SRT/SRTP 対応のストリーミングサーバー
+// 依存: なし
+// 競合するキー: packages(net-libs/libsrtp, net-libs/srt),
+//               buildtime_packages(dev-build/cmake, dev-build/automake, dev-lang/tcl),
+//               services(srs)
+// 備考: SRS は system ffmpeg (ffmpeg 7系) と非互換のため --sys-ffmpeg=off でビルドする
+{
+  packages: [
+    "net-libs/libsrtp",
+    "net-libs/srt",
+  ],
+  buildtime_packages: [
+    "dev-lang/tcl",       // SRS ビルドシステムが使用
+    "dev-build/cmake",    // SRS ビルドシステムが使用
+    "dev-build/automake", // SRS ビルドシステムが使用
+  ],
+  services: ["srs"],
+}

@@ -1,0 +1,8 @@
+// theme: xmrig
+// xmrigバイナリをGitHubの最新リリースからダウンロードして /usr/bin/ にインストールする
+// 依存: なし
+// 競合するキー: なし
+// 備考: xmrigはPortageパッケージではなくGitHubリリース(jammy向けビルド)を使用するため
+//       packagesへの追記は不要。インストール処理はすべて build.d スクリプトが担う。
+{
+}
