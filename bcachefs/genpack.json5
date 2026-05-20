@@ -1,0 +1,41 @@
+// theme: bcachefs
+// bcachefs を利用可能にする。Linux 6.18 で mainline から削除されたため、
+// sys-fs/bcachefs-tools[modules] (linux-mod-r1) で OOT カーネルモジュールを
+// ビルド・インストールする。CONFIG_RUST=y が必要なため、ビルド済み
+// gentoo-kernel-bin ではなくソースビルドの gentoo-kernel に切替える。
+// 依存: なし
+// 競合するキー:
+//   packages(sys-kernel/gentoo-kernel, sys-fs/bcachefs-tools),
+//   buildtime_packages(dev-lang/rust-bin, dev-util/bindgen),
+//   mask(sys-kernel/gentoo-kernel-bin),
+//   accept_keywords(sys-kernel/gentoo-kernel, virtual/dist-kernel, sys-fs/bcachefs-tools),
+//   use(dev-lang/rust-bin)
+// 備考:
+//   - kernel/config.d/bcachefs.config も併せて取り込むこと (CONFIG_RUST=y)。
+//   - bcachefs-tools[+modules] が emerge 時にカーネル CONFIG_CHECK を実施する
+//     (RUST, CRC64, XXHASH, RAID6_PQ, XOR_BLOCKS, LZ4_*, ZSTD_*,
+//      CRYPTO_LIB_{SHA256,CHACHA,POLY1305}, KEYS, SYMBOLIC_ERRNAME ほか、
+//      かつ !BCACHEFS_FS)。RUST 以外は現行 gentoo-kernel の fedora baseline で
+//      既に有効。6.18+ では BCACHEFS_FS は in-tree から削除済み。
+//   - rust-bin に rust-src USE が必要 (kernel CONFIG_RUST=y ビルド時に参照)。
+{
+  packages: [
+    "sys-kernel/gentoo-kernel",  // bcachefs-tools[modules] が KV_DIR のソースを必要とする
+    "sys-fs/bcachefs-tools",
+  ],
+  buildtime_packages: [
+    "dev-lang/rust-bin",  // kernel CONFIG_RUST=y / bcachefs-tools の cargo ビルド
+    "dev-util/bindgen",   // kernel Rust バインディング生成
+  ],
+  mask: [
+    "sys-kernel/gentoo-kernel-bin",  // CONFIG_RUST=y でビルドされていないため除外
+  ],
+  accept_keywords: {
+    "sys-kernel/gentoo-kernel": null,
+    "virtual/dist-kernel": null,
+    "sys-fs/bcachefs-tools": null,
+  },
+  use: {
+    "dev-lang/rust-bin": "rust-src",  // kernel ビルドが rust-src コンポーネントを要求
+  },
+}
