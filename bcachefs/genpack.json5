@@ -19,6 +19,7 @@
 //      既に有効。6.18+ では BCACHEFS_FS は in-tree から削除済み。
 //   - rust-bin に rust-src USE が必要 (kernel CONFIG_RUST=y ビルド時に参照)。
 {
+  binpkg_excludes: ["sys-kernel/gentoo-kernel","sys-fs/bcachefs-tools"],
   packages: [
     "sys-kernel/gentoo-kernel",  // bcachefs-tools[modules] が KV_DIR のソースを必要とする
     "sys-fs/bcachefs-tools",
