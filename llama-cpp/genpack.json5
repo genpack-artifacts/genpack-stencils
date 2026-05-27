@@ -1,0 +1,25 @@
+// theme: llama-cpp
+// llama.cpp (Vulkanバックエンド) を artifact-local overlay の固定リリースebuildで導入する
+// 依存: GPUベンダに応じた Vulkan ICD (Intel/AMD は media-libs/mesa[vulkan]、NVIDIA は
+//       x11-drivers/nvidia-drivers が提供)。下記は Intel/AMD/ソフトウェア向けの既定。
+// 競合するキー: なし (packages / use への追記のみ)
+// 備考:
+//   - ebuild 実体は overlay/sci-ml/llama-cpp/ に同梱。9999ではなくタグ固定(0_pXXXX)で
+//     binpkg/Lowerキャッシュを効かせる方針。バージョン更新手順はそのebuild冒頭とREADMEを参照。
+//   - Manifest はコミット不要 (genpack が Lower フェーズで自動生成する)。
+//   - ビルド依存(cmake, vulkan-headers, shaderc, glslang, spirv-*, vulkan-loader)は
+//     ebuildのDEPENDが宣言しておりemergeが自動で引くため buildtime_packages への列挙は不要。
+//   - vulkan USE は ebuild 側で IUSE="+vulkan" としデフォルトON。プロファイル非依存で
+//     Vulkanバックエンドが入る。ICDが無い環境ではロードされずCPUへフォールバックするだけ。
+{
+    packages: [
+        "sci-ml/llama-cpp",
+    ],
+    use: {
+        // llama.cpp 自体には不要だが、Intel/AMD/ソフトウェア(lavapipe)向けの
+        // Vulkan ランタイム ICD を引くため mesa を vulkan で。
+        // NVIDIA 専用機ではこの行は不要(ICDは nvidia-drivers が提供)。
+        // VIDEO_CARDS は環境に合わせて各アーティファクトで指定すること。
+        "media-libs/mesa": "vulkan",
+    },
+}
