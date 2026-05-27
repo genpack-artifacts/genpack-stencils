@@ -1,20 +1,29 @@
 // theme: srs
-// SRS (Simple Realtime Server) をソースからビルドしてインストールする
-// RTMP/SRT/SRTP 対応のストリーミングサーバー
-// 依存: なし
-// 競合するキー: packages(net-libs/libsrtp, net-libs/srt),
-//               buildtime_packages(dev-build/cmake, dev-build/automake, dev-lang/tcl),
-//               services(srs)
-// 備考: SRS は system ffmpeg (ffmpeg 7系) と非互換のため --sys-ffmpeg=off でビルドする
+// SRS (Simple Realtime Server) を Gentoo 公式 media-video/srs で導入する。
+// RTMP / SRT / HLS 対応のストリーミングサーバー。
+// 依存: システム ffmpeg (srs は --sys-ffmpeg=on。対象アーティファクトに media-video/ffmpeg
+//       があれば追加不要。無ければ packages に追加すること)
+// 競合するキー: packages(media-video/srs), accept_keywords(media-video/srs),
+//               use(media-video/srs), 任意で services(srs)
+// 備考:
+//   - 旧 files/build.d/srs.sh (ソースDL+configure+make) を公式 ebuild へ置換。ビルドは
+//     Portage(Lower)で完結し binpkg/Lower キャッシュが効く。tcl/cmake/automake の
+//     buildtime_packages も不要になった (ebuild が内包)。
+//   - バイナリは /usr/bin/srs-media (公式 ebuild の newbin objs/srs srs-media)。
+//   - 設定は公式同梱の /etc/srs/srs.conf をそのまま使用 (daemon off; のため systemd は
+//     foreground 運用)。HLS 出力先は /var/spool/srs。
+//   - 公式 ebuild は OpenRC の init.d のみ同梱。genpack(systemd) 用に unit を files/ で自前提供。
+//   - dev-lang/tcl / net-libs/libsrtp は不要 (公式は rtc=off。ldd で libsrtp 非リンク確認済み)。
 {
   packages: [
-    "net-libs/libsrtp",
-    "net-libs/srt",
+    "media-video/srs",
   ],
-  buildtime_packages: [
-    "dev-lang/tcl",       // SRS ビルドシステムが使用
-    "dev-build/cmake",    // SRS ビルドシステムが使用
-    "dev-build/automake", // SRS ビルドシステムが使用
-  ],
-  services: ["srs"],
+  accept_keywords: {
+    "media-video/srs": null, // ~amd64 (2026-05 にツリー入り)
+  },
+  use: {
+    "media-video/srs": "srt h265 threads", // SRT取込 + H.265 + マルチスレッド。要件に応じ調整
+  },
+  // services: ["srs"], // 自動起動したい場合のみ追加。unit は files/ で同梱するので、
+  //                    // 既定では起動せずインスタンスごとに systemctl enable する運用も可。
 }
