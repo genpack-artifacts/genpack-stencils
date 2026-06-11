@@ -1,0 +1,186 @@
+#!/usr/bin/python3
+"""
+exec-guard の memfd_create + fexecve (fileless execution) に対する挙動を検証するテスト。
+
+攻撃者が多用する「ファイルを一切ディスクに残さずに ELF を実行する」手法を再現する。
+ELF バイナリのバイト列を memfd (内部 tmpfs 上の無名ファイル) に書き込み、
+execveat(fd, "", AT_EMPTY_PATH) でそのまま実行する。
+
+exec-guard の bprm_check_security フックは exec 対象ファイルの super_block を見て
+trusted_devs マップに登録された st_dev でなければ EPERM を返す。memfd の属する
+内部 tmpfs は trusted_devs に登録されていないため、本来であればブロックされるはず。
+
+このスクリプト自体は Python スクリプト (非 ELF) なのでインタプリタ経由で実行でき、
+exec-guard の制約は受けない。
+
+判定:
+  - 陰性対照: ディスク上の信頼バイナリ (/bin/true 等) を fexecve → 成功するはず
+  - 本命テスト: memfd にコピーした同バイナリを fexecve → EPERM でブロックされるはず
+
+戻り値: すべて期待通りなら 0、想定外(memfd 実行が通ってしまった等)なら 1。
+"""
+import ctypes
+import ctypes.util
+import os
+import sys
+import errno
+
+# --- x86_64 syscall numbers ---
+SYS_memfd_create = 319
+SYS_execveat = 322
+
+MFD_CLOEXEC = 0x0001
+AT_EMPTY_PATH = 0x1000
+
+libc = ctypes.CDLL(ctypes.util.find_library("c") or "libc.so.6", use_errno=True)
+
+
+def memfd_create(name: bytes, flags: int) -> int:
+    fd = libc.syscall(SYS_memfd_create, ctypes.c_char_p(name), ctypes.c_uint(flags))
+    if fd < 0:
+        e = ctypes.get_errno()
+        raise OSError(e, os.strerror(e), "memfd_create")
+    return fd
+
+
+def _make_argv(items):
+    arr = (ctypes.c_char_p * (len(items) + 1))()
+    for i, s in enumerate(items):
+        arr[i] = ctypes.c_char_p(s)
+    arr[len(items)] = None
+    return arr
+
+
+def execveat(dfd: int, path: bytes, argv, envp, flags: int) -> int:
+    """成功すればプロセスは置き換わり戻らない。失敗時は errno を返す(置き換わらない)。"""
+    a = _make_argv(argv)
+    e = _make_argv(envp)
+    libc.syscall(
+        SYS_execveat,
+        ctypes.c_int(dfd),
+        ctypes.c_char_p(path),
+        a,
+        e,
+        ctypes.c_int(flags),
+    )
+    # ここに到達したら exec は失敗している
+    return ctypes.get_errno()
+
+
+def find_trusted_binary() -> str:
+    """squashfs (lower layer) 由来の、すぐ終了する小さな ELF を探す。"""
+    candidates = [
+        "/bin/true",
+        "/usr/bin/true",
+        "/bin/busybox",
+        "/usr/bin/busybox",
+        "/bin/cat",
+        "/usr/bin/cat",
+    ]
+    for path in candidates:
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            try:
+                with open(path, "rb") as f:
+                    if f.read(4) == b"\x7fELF":
+                        return path
+            except OSError:
+                continue
+    raise RuntimeError("信頼できる ELF バイナリが見つかりませんでした")
+
+
+def run_in_child(fn) -> tuple[int, int]:
+    """fn を子プロセスで実行。 (exit_code, term_signal) を返す。"""
+    pid = os.fork()
+    if pid == 0:
+        # child
+        try:
+            fn()
+        except BaseException:
+            os._exit(127)
+        os._exit(126)  # fn が戻ってきた = exec しなかった
+    _, status = os.waitpid(pid, 0)
+    if os.WIFEXITED(status):
+        return os.WEXITSTATUS(status), 0
+    if os.WIFSIGNALED(status):
+        return -1, os.WTERMSIG(status)
+    return -1, 0
+
+
+def child_fexecve_ondisk(path: str):
+    """陰性対照: ディスク上の信頼バイナリを fexecve。成功すれば exit 0 で置き換わる。"""
+    fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC)
+    err = execveat(fd, b"", [b"test-true"], [], AT_EMPTY_PATH)
+    # exec 失敗。errno を終了コードにエンコードして返す(EPERM=1 等)
+    os._exit(64 + min(err, 63))
+
+
+def child_fexecve_memfd(elf_bytes: bytes):
+    """本命: ELF を memfd に書き込んで fexecve。ブロックされれば EPERM が返る。"""
+    fd = memfd_create(b"fileless", 0)  # CLOEXEC なしで exec をまたいでも参照可能に
+    os.write(fd, elf_bytes)
+    os.lseek(fd, 0, os.SEEK_SET)
+    err = execveat(fd, b"", [b"memfd-payload"], [], AT_EMPTY_PATH)
+    os._exit(64 + min(err, 63))
+
+
+def decode(exit_code: int, sig: int) -> str:
+    if sig:
+        return f"シグナル {sig} で終了"
+    if exit_code == 0:
+        return "exec 成功 (バイナリが実行された)"
+    if exit_code == 126:
+        return "exec が戻ってきた (内部エラー)"
+    if exit_code == 127:
+        return "子プロセスで例外発生"
+    if exit_code >= 64:
+        e = exit_code - 64
+        return f"exec 失敗: errno={e} ({errno.errorcode.get(e, '?')}, {os.strerror(e)})"
+    return f"不明な終了コード {exit_code}"
+
+
+def main() -> int:
+    print("=== exec-guard memfd_create + fexecve テスト ===\n")
+
+    binpath = find_trusted_binary()
+    with open(binpath, "rb") as f:
+        elf_bytes = f.read()
+    print(f"使用する信頼バイナリ: {binpath} ({len(elf_bytes)} bytes)\n")
+
+    ok = True
+
+    # --- 陰性対照: ディスク上(lower layer)の信頼バイナリを fexecve ---
+    print("[1] 陰性対照: ディスク上の信頼バイナリを fexecve")
+    code, sig = run_in_child(lambda: child_fexecve_ondisk(binpath))
+    print(f"    結果: {decode(code, sig)}")
+    if code == 0:
+        print("    => OK: 信頼バイナリの fexecve は許可された (期待通り)\n")
+    else:
+        print("    => 注意: 信頼バイナリの fexecve がブロックされた。")
+        print("       fexecve 自体が使えないか、設定の問題の可能性あり。\n")
+        ok = False
+
+    # --- 本命: memfd 経由の fileless 実行 ---
+    print("[2] 本命: memfd_create + fexecve (fileless execution)")
+    code, sig = run_in_child(lambda: child_fexecve_memfd(elf_bytes))
+    print(f"    結果: {decode(code, sig)}")
+    if code == 64 + errno.EPERM:
+        print("    => OK: memfd からの実行は EPERM でブロックされた (exec-guard 有効)\n")
+    elif code == 0:
+        print("    => 失敗: memfd からの実行が成功してしまった!")
+        print("       fileless 実行が素通りしている。exec-guard の穴。\n")
+        ok = False
+    else:
+        print("    => 想定外の結果。詳細を確認のこと。\n")
+        ok = False
+
+    print("=== 結論 ===")
+    if ok:
+        print("exec-guard は memfd_create + fexecve による fileless 実行をブロックしている。")
+        return 0
+    else:
+        print("期待と異なる結果。上記ログを確認のこと。")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

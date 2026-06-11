@@ -1,0 +1,14 @@
+// theme: exec-guard
+// genpack-init の exec-guard を有効化し、overlayfs upper layer に持ち込まれた
+// ELF バイナリ・共有ライブラリの実行を eBPF LSM でブロックする
+// 依存: なし(profile は paravirt 等、genpack-init を PID 1 とする構成が前提)
+// 競合するキー: use(sys-apps/genpack-init)
+// 備考: ビルド時に必要な clang / bpftool は genpack-overlay の ebuild が
+//       依存関係として自動的に追加するため、ここで指定する必要はない。
+//       詳細は genpack/docs/exec-guard.md を参照。
+//       無効化は system.ini の `exec_guard = false`。
+{
+  use: {
+    "sys-apps/genpack-init": "exec-guard",
+  },
+}
