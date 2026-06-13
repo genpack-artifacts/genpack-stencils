@@ -1,0 +1,19 @@
+// theme: email-catchall
+// 任意のドメイン・宛先へ送られたメールをすべてローカルの mail ユーザーに集約するキャッチオール構成。
+// postfix で受信・転送し、dovecot の IMAP/POP3 でメールを保存・配信する。
+// TLS なし・パスワードなしで接続できるため、メール送受信を伴う開発・テスト環境に最適。
+// 依存: なし
+// 競合するキー: packages(mail-mta/postfix, net-mail/dovecot), services(postfix, dovecot)
+// 備考: setup-catchall.sh が postfix/dovecot を設定する。
+//       メールクライアント(例: mail-client/evolution)は別途 packages に追加すること。
+//       接続先: IMAP localhost:143 (TLS なし、認証なし), SMTP localhost:25 (TLS なし)
+{
+  packages: [
+    "mail-mta/postfix",
+    "net-mail/dovecot",
+  ],
+  services: [
+    "postfix",
+    "dovecot",
+  ],
+}
