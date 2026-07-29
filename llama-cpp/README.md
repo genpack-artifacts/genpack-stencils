@@ -9,7 +9,7 @@ llama-cpp/
   genpack.json5                              # packages / use の断片
   overlay/
     sci-ml/llama-cpp/
-      llama-cpp-0_p9354.ebuild               # タグ固定ebuild (Manifestは自動生成のため不要)
+      llama-cpp-0_p10155.ebuild              # タグ固定ebuild (Manifestは自動生成のため不要)
   README.md
 ```
 
@@ -87,7 +87,7 @@ Portage 準拠のバージョン文字列 `0_pXXXX` を用います（Gentoo の
 1. https://github.com/ggml-org/llama.cpp/releases で新しいタグを確認する
 2. ebuild ファイルをリネームする（例）:
    ```sh
-   mv llama-cpp-0_p9354.ebuild llama-cpp-0_p9500.ebuild
+   mv llama-cpp-0_p10155.ebuild llama-cpp-0_p10300.ebuild
    ```
 3. （まれに）ebuild 内の `UPSTREAM_TAG`・フラグ・パッチを調整する
 4. Manifest は手動生成不要（Lower フェーズで自動生成）。手元で確認したい場合のみ:
@@ -106,6 +106,14 @@ Lower 層が更新されれば、以降の `genpack upper` は再び高速にな
 npm を使わず、GitHub リリースに添付された UI tarball（`llama-<tag>-ui.tar.gz`）を
 `src_prepare` で `tools/ui/dist/` に展開する。これによりビルド時の npm 実行と
 HuggingFace ダウンロードを回避している（network-sandbox で npm はブロックされるため）。
+
+UI は SvelteKit ベースの PWA ビルドに変わっており、`index.html` 単体ではなく
+`_app/`・PWA アイコン・`sw.js` などを含む**ディレクトリツリー全体**を配置する必要がある
+（`scripts/ui-assets.cmake` の Priority 1 は `dist/index.html` の有無だけを見て、
+`llama-ui-embed` が `dist/` 以下を再帰的に埋め込む）。このため `src_prepare` は
+tarball の展開結果を丸ごと `tools/ui/dist/` へコピーしている。
+**版更新時は UI tarball の構造が変わっていないか**（少なくとも `index.html` が
+トップに存在するか）を確認すること。
 
 `llama-server` 起動例:
 
