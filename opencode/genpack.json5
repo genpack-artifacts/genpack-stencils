@@ -1,0 +1,72 @@
+// theme: opencode
+// opencode CLI (Bunでコンパイルされた単一実行ファイル) をGitHubリリースから
+// /usr/bin/opencode としてインストールし、システム全体の指示文
+// (/etc/opencode/AGENTS.md) を配置する
+// 依存: なし
+// 競合するキー: packages (下記のパッケージを既に列挙している場合)
+// 備考:
+//   - opencodeにPortageパッケージは無く、公式配布もdeb/rpmではなくtar.gz(中身は
+//     単一実行ファイル1個)のみ。インストール処理はすべて build.d スクリプトが担う。
+//   - 実行ファイルは175MiB。squashfsの既定(gzip -1)で約65MiB、
+//     イメージを --compression xz でビルドするなら約45MiBがイメージ増分の実額。
+//   - 動的リンクは libc/libm/libdl/libpthread のみ(要求GLIBCは最大2.17)なので
+//     ランタイム依存の追加は不要。
+//   - システム全体の指示文は files/etc/opencode/ の2ファイルで実現する。
+//     /etc/opencode は opencode の managed config ディレクトリ(Linuxの場合)で、
+//     ここに置いた opencode.json は最優先で読まれユーザーが上書きできない。
+//     AGENTS.md 自体を直接読む仕組みは無いので instructions で明示的に指す。
+{
+  packages: [
+    // ripgrepだけは実質必須。opencodeはPATH上の rg を最優先で使い、見つからない場合は
+    // GitHubから ripgrep 15.1.0 を実行時ダウンロードして展開しようとする(4.7MiB)。
+    "sys-apps/ripgrep",
+
+    // ────────────────────────────────────────────────────────────────────
+    // 以下は「入れておくとエージェントが働きやすい」候補。必要なものだけ
+    // コメントを外して採用する。
+    //
+    // genpackアーティファクトには通常のGentooにある調査系ツールがほとんど無く、
+    // しかも実行時に追加できない。トラブルシューティングをエージェントに任せる
+    // つもりなら、何を渡すかはビルド時に決め切っておく必要がある。
+    //
+    // 数値はGentoo実機で計測したインストール後のサイズ(squashfsのgzipでは概ね
+    // この1/3程度がイメージ増分)。
+    //
+    // ⚠ プロファイルによっては既に入っている。重複追加の前にREADMEの
+    //   「baseに既にあるもの」節を確認すること。稼働中のイメージなら
+    //   `grep '^カテゴリ/名前' /.genpack/packages` で確定できる。
+    // ────────────────────────────────────────────────────────────────────
+
+    // -- 調査の足回り。小さいので基本的に全部入れてよい --
+    // "app-misc/jq",           // 0.5MiB   JSON整形・抽出。設定やAPI応答の確認に必須級
+    // "sys-apps/diffutils",    // 1.6MiB   diff。「正常な設定と何が違うか」を示せる
+    // "app-arch/tar",          // 2.9MiB   ログやダンプの採取・展開
+    // "sys-apps/file",         // 12.3MiB  ファイル種別判定。大半はmagicデータベース
+    // "sys-apps/less",         // 0.3MiB   ページャ。エージェントは非対話なので主に人間用
+
+    // -- プロセス・リソース --
+    // "sys-process/lsof",      // 0.4MiB   「このポート/ファイルを誰が握っているか」
+    // "sys-process/psmisc",    // 0.8MiB   pstree / fuser / killall
+    // "app-admin/sysstat",     // (未計測) iostat / pidstat / sar。性能問題の切り分け
+
+    // -- ネットワーク --
+    // "net-misc/curl",         // 3.3MiB   HTTP疎通確認。baseにはpython+requestsはあるがCLIは無い
+    // "net-dns/doggo",         // 15.6MiB  DNS問い合わせ。net-dns/bind-toolsはGentooから
+    //                          //          削除済み(bug #977172)。これを入れるとbaseの
+    //                          //          package-scriptが dig/nslookup のシムを/usr/binに置く
+    // "net-misc/socat",        // 1.0MiB   TCP疎通確認。baseのtelnetシムが案内する先。
+    //                          //          genpack/paravirt には既に入っている
+
+    // -- ハードウェア。genpack/systemimg[baremetal] には既にひと通り入っている --
+    // "sys-apps/pciutils",     // 0.4MiB   lspci
+    // "sys-apps/usbutils",     // 0.2MiB   lsusb
+    // "sys-apps/dmidecode",    // 0.2MiB   DMI/SMBIOS
+    // "sys-apps/smartmontools",// 2.0MiB   ディスクのSMART
+
+    // -- 重いので用途が確実な場合のみ --
+    // "dev-vcs/git",           // 39.7MiB  リポジトリを置くアーティファクトのみ。
+    //                          //          単なる調査用途では不要
+    // "genpack/devel",         // gcc(335MiB)+binutils+gdb(13.5MiB)。ネイティブな
+    //                          //          ビルドやコアダンプ解析が要る場合のみ
+  ],
+}
