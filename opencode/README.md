@@ -1,6 +1,7 @@
 # theme: opencode
 
 opencode CLI を GitHub リリースから `/usr/bin/opencode` としてインストールするステンシルです。
+GUIアーティファクトにはオプションでデスクトップ版（Electron）も入れることができます（後述）。
 
 Portage パッケージは存在せず、公式配布も deb/rpm ではありません（deb/rpm があるのは
 Electron 製のデスクトップ版のみ）。CLI は tar.gz の中に **Bun でコンパイルされた
@@ -13,7 +14,8 @@ Electron 製のデスクトップ版のみ）。CLI は tar.gz の中に **Bun �
 ```
 opencode/
   genpack.json5                    # packages の断片 (必須の ripgrep + 推奨ツールの候補リスト)
-  files/build.d/opencode.sh        # ダウンロード・sha256検証・設置
+  files/build.d/opencode.sh        # ダウンロード・設置
+  files/build.d/opencode-desktop.sh # 任意: GUIアーティファクトにデスクトップ版(Electron)を設置
   files/etc/opencode/opencode.json # managed config: instructions で AGENTS.md を指す
   files/etc/opencode/AGENTS.md     # システム全体の指示文 (genpack環境の説明)
   README.md
@@ -29,6 +31,9 @@ opencode/
 3. `genpack.json5` の `packages` を対象アーティファクトの `packages` へマージし、
    出典コメント `// ref: opencode/genpack.json5` を残す。有効なのは `sys-apps/ripgrep`
    だけで、残りはコメントアウトされた候補リスト（後述）。必要なものを選んで有効化する。
+4. （任意）デスクトップ版も入れる場合は `files/build.d/opencode-desktop.sh` も同様に
+   コピーする。GUIアーティファクト（`sys-apps/xdg-desktop-portal` 入り）でビルドされた
+   ときのみインストールされ、そうでなければ何もしないで正常終了する。
 
 ## システム全体の指示文について
 
@@ -68,23 +73,55 @@ opencode には `/etc/claude-code/CLAUDE.md` に相当する「システム全�
   実際にプロンプトへ載ったかは、ダミーの OpenAI 互換エンドポイントを立てて
   `opencode run -m <fake>/<model>` を実行し、受信リクエストの system メッセージを見るのが確実。
 
-## バージョン更新
+## バージョンについて
 
-`opencode.sh` 冒頭の `VERSION` と `SHA256_*` を書き換えるだけです。sha256 は
+`opencode.sh` は `get-github-download-url` で GitHub の最新リリースを引くため、
+バージョンの固定や更新作業は不要です。opencode はほぼ毎日（npm 上のバージョン数は
+1万を超える）リリースされるため、ビルドのたびに中身が変わり、アーティファクトの
+再現性は保証されません。
 
-```sh
-curl -sS https://api.github.com/repos/anomalyco/opencode/releases/latest \
-  | jq -r '.assets[]|select(.name|startswith("opencode-linux"))|"\(.name)\t\(.digest)"'
-```
+## デスクトップ版（Electron）
 
-で取れます。
+`files/build.d/opencode-desktop.sh` は CLI に加えてデスクトップ版を入れるものです。
+`require-installed` でビルド時に `sys-apps/xdg-desktop-portal` がインストールされているか
+調べ、入っていればGUIアーティファクトとみなしてインストールし、無ければ何もしないで
+正常終了します。
 
-**latest を追わずバージョン固定にしている理由**: opencode はほぼ毎日（npm 上のバージョン数は
-1万を超える）リリースされるため、`get-github-download-url` で latest を引くとビルドのたびに
-中身が変わり、アーティファクトの再現性が失われます。固定 URL なら `download` の
-`/var/cache/download` キャッシュも効きます。
+デスクトップ版は .deb でのみ配布されます（単一実行ファイル版は無い）。スクリプトは
+`opencode.sh` と同様に最新リリースを追い、.deb の payload (`data.tar.xz`) を
+`ar`（stage3 標準の binutils）で取り出して、deb 内の構造のまま `/` に展開します：
 
-## イメージサイズへの影響（v1.18.18 実測）
+- `/opt/OpenCode/` — Electron アプリ本体（展開後 445 MiB）
+- `/usr/share/applications/opencode-desktop.desktop`、`/usr/share/icons/hicolor/`、
+  `/usr/share/metainfo/`
+
+標準的な FHS レイアウトなのでパスの寄せ替えは不要です。ランタイム依存
+（.deb の宣言に従い libgtk-3-0、libnss3、libatspi2.0-0、libsecret-1-0 等）は
+GNOME デスクトップなら揃っています。
+
+設置後に `chrome-sandbox` へ `chmod 4755` を行います。SUID ビットが無いと
+非rootユーザーで Electron のサンドボックスが起動できないためです。
+
+### イメージサイズへの影響（v1.18.21 実測）
+
+| | サイズ |
+|---|---|
+| .deb | 117 MiB (amd64) / 111 MiB (arm64) |
+| 展開ツリー (/opt + /usr/share) | 445 MiB |
+| squashfs 既定 (gzip -1) | **約 170 MiB** |
+| squashfs `--compression xz` | 約 110 MiB (推定) |
+
+イメージ増分は CLI（約 65MiB）の約2.6倍です。サイズの小さいイメージを維持したい場合は
+このスクリプトを取り込まないでください。
+
+### 自動更新の挙動について
+
+デスクトップ版には electron-updater（GitHub Releases の latest チャネル）が有効になっています。
+ただしイメージの `/opt` は read-only なので in-place 更新は失敗し、実質
+**イメージビルド時点のバージョンが維持**されます。更新するにはイメージを再ビルドしてください。
+更新キャッシュが `$HOME` 配下に溜まる可能性があります。
+
+## イメージサイズへの影響（CLI、v1.18.18 実測）
 
 | | サイズ |
 |---|---|
