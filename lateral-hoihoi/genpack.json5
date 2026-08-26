@@ -1,0 +1,20 @@
+// theme: lateral-hoihoi
+// ラテラルムーヴメント(内部侵入者の横展開偵察)検出の罠デーモン。
+// nftables の NFLOG 経由で自ホスト宛の想定外ユニキャスト(ポートスキャン等)を
+// 検出・集約し、メールで管理者に通知する。
+// 依存: net-firewall/nftables (罠ルール + NFLOG)
+// 競合するキー: packages(net-firewall/nftables), 任意で services(lateral-hoihoi)
+// 備考:
+//   - デーモンは Python 標準ライブラリのみ(追加パッケージ不要)。
+//   - lateral_hoihoi.py → /usr/bin/lateral-hoihoi、設定雛形 → /etc/lateral-hoihoi.conf (0600)。
+//     SMTP 認証情報を設定に直書きするため root:root 0600 を維持すること。
+//   - 罠ルールのベースライン (nftables.coexist.example.nft) → /etc/nftables/rules/lateral-hoihoi.nft。
+//     インスタンス固有のサービス除外はインスタンス上でカスタマイズする (ファイル内コメント参照)。
+//   - unit は同梱するが既定では自動起動しない。
+//     インスタンスごとに systemctl enable --now lateral-hoihoi も可。
+{
+  packages: [
+    "net-firewall/nftables",
+  ],
+  // services: ["lateral-hoihoi"], // 自動起動したい場合のみ追加。
+}

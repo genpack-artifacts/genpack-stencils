@@ -1,0 +1,26 @@
+# ref: lateral-hoihoi/files/usr/lib/systemd/system/lateral-hoihoi.service
+[Unit]
+Description=lateral-hoihoi lateral movement trap daemon
+Wants=network-online.target
+After=network-online.target nftables.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/lateral-hoihoi --config /etc/lateral-hoihoi.conf
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictAddressFamilies=AF_NETLINK AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target
