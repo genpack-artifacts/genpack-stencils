@@ -2,7 +2,7 @@
 // opencode CLI (Bunでコンパイルされた単一実行ファイル) をGitHubリリースから
 // /usr/bin/opencode としてインストールし、システム全体の指示文
 // (/etc/opencode/AGENTS.md) を配置する
-// 依存: なし
+// 依存: net-libs/nodejs (buildtimeのみ、デスクトップ版 opencode-desktop.sh を採用する場合)
 // 競合するキー: packages (下記のパッケージを既に列挙している場合)
 // 備考:
 //   - opencodeにPortageパッケージは無く、公式配布もdeb/rpmではなくtar.gz(中身は
@@ -16,6 +16,13 @@
 //     ここに置いた opencode.json は最優先で読まれユーザーが上書きできない。
 //     AGENTS.md 自体を直接読む仕組みは無いので instructions で明示的に指す。
 {
+  // デスクトップ版 (opencode-desktop.sh) が app.asar をパッチしてウィンドウメニューを
+  // 無効化するのに node を使う。buildtime 専用なので Lower に入るだけで最終イメージには
+  // 残らない。デスクトップ版を採らない場合は不要。
+  buildtime_packages: [
+    "net-libs/nodejs",
+  ],
+
   packages: [
     // ripgrepだけは実質必須。opencodeはPATH上の rg を最優先で使い、見つからない場合は
     // GitHubから ripgrep 15.1.0 を実行時ダウンロードして展開しようとする(4.7MiB)。

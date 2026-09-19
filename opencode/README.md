@@ -34,6 +34,8 @@ opencode/
 4. （任意）デスクトップ版も入れる場合は `files/build.d/opencode-desktop.sh` も同様に
    コピーする。GUIアーティファクト（`sys-apps/xdg-desktop-portal` 入り）でビルドされた
    ときのみインストールされ、そうでなければ何もしないで正常終了する。
+   この場合、ステンシルの `genpack.json5` の `buildtime_packages`
+   （net-libs/nodejs、app.asar パッチ用）も同様にマージすること（後述）。
 
 ## システム全体の指示文について
 
@@ -101,6 +103,22 @@ GNOME デスクトップなら揃っています。
 
 設置後に `chrome-sandbox` へ `chmod 4755` を行います。SUID ビットが無いと
 非rootユーザーで Electron のサンドボックスが起動できないためです。
+
+### ウィンドウメニューの無効化
+
+リリース版は Linux でも Electron の既定メニューを持ち、隠し状態ながら Alt キーで
+表示が切替わります。Alt+~ での IME 切替と競合するため、スクリプトは
+`resources/app.asar` 内の `out/main/index.js` の `createMenu()` を node スクリプトで
+パッチし、Linux では `Menu.setApplicationMenu(null)` を呼んでメニューを完全に取り除きます
+（asar は header offset と SHA256 integrity を再計算して in-place 書き換え）。
+メニュー操作はウィンドウ内のタイトルバーメニューにそのまま残るので、機能的な影響は
+ありません。
+
+このパッチに `net-libs/nodejs` が必要ですが、ステンシルの `buildtime_packages`
+として指定するため Lower 専用で、最終イメージには残りません。リリースのレイアウトが
+変わり `createMenu()` のアンカーが見つからない場合や asar 構造が想定と異なる場合は
+パッチが失敗してビルドが止まります。その場合はパッチスクリプト（asar-patch.js）と
+アンカー文字列を新しいリリースに合わせて更新してください。
 
 ### イメージサイズへの影響（v1.18.21 実測）
 
