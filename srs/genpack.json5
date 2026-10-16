@@ -14,6 +14,10 @@
 //     foreground 運用)。HLS 出力先は /var/spool/srs。
 //   - 公式 ebuild は OpenRC の init.d のみ同梱。genpack(systemd) 用に unit を files/ で自前提供。
 //   - dev-lang/tcl / net-libs/libsrtp は不要 (公式は rtc=off。ldd で libsrtp 非リンク確認済み)。
+//   - patches/media-video/srs/srs-srt-ipv6-listen.patch: 6.0 系の SRT over IPv6 不具合 3 件を
+//     修正 (listen の IPv6 形式解釈 / SRTO_IPV6ONLY / accept の sockaddr_storage 化)。
+//     files/build.d/srs-ipv6.sh とセットで SRT を [::]:10080 dual-stack で待ち受ける。
+//     検証: srs-6.0.184 + libsrt 1.5.4。upstream develop には 2,3 と同様の修正あり。
 {
   packages: [
     "media-video/srs",

@@ -1,0 +1,47 @@
+# SRS 6.0 系 SRT over IPv6 修正 (3件)
+# 1. srt_server.listen が [::]:10080 形式を受け付けない (src/app/srs_app_srt_server.cpp)
+# 2. IPv6 wildcard bind に SRTO_IPV6ONLY の明示が必要 (src/protocol/srs_protocol_srt.cpp)
+# 3. accept の sockaddr_in が IPv6 ピアでスタックを壊す (src/protocol/srs_protocol_srt.cpp)
+# 検証: media-video/srs-6.0.184 + libsrt 1.5.4。upstream develop には 2,3 と同様の修正あり。
+--- a/src/app/srs_app_srt_server.cpp
++++ b/src/app/srs_app_srt_server.cpp
+@@ -200,7 +200,13 @@
+     acceptors_.push_back(acceptor);
+ 
+     int port; string ip;
+-    srs_parse_endpoint(srs_int2str(_srs_config->get_srt_listen_port()), ip, port);
++    // Allow IPv6 endpoints like [::]:10080 in srt_server.listen.
++    string listen_ep = srs_int2str(_srs_config->get_srt_listen_port());
++    SrsConfDirective* conf = _srs_config->get_root();
++    if (conf && (conf = conf->get("srt_server")) && (conf = conf->get("listen")) && !conf->arg0().empty()) {
++        listen_ep = conf->arg0();
++    }
++    srs_parse_endpoint(listen_ep, ip, port);
+ 
+     if ((err = acceptor->listen(ip, port)) != srs_success) {
+         return srs_error_wrap(err, "srt listen %s:%d", ip.c_str(), port);
+--- a/src/protocol/srs_protocol_srt.cpp
++++ b/src/protocol/srs_protocol_srt.cpp
+@@ -205,6 +205,13 @@
+             hints.ai_family, hints.ai_socktype, hints.ai_flags);
+     }
+ 
++    // libsrt requires an explicit SRTO_IPV6ONLY when binding to the IPv6
++    // wildcard ::. Use dual-stack (0) to also accept IPv4 v4-mapped clients.
++    if (r->ai_family == AF_INET6) {
++        int v6only = 0;
++        SET_SRT_OPT(srt_fd, SRTO_IPV6ONLY, v6only);
++    }
++
+     if ((err = do_srs_srt_listen(srt_fd, r)) != srs_success) {
+         srt_close(srt_fd);
+         return srs_error_wrap(err, "srt_fd=%d", srt_fd);
+@@ -752,7 +759,7 @@
+     srs_error_t err = srs_success;
+ 
+     while (true) {
+-        sockaddr_in inaddr;
++        sockaddr_storage inaddr; // Support both IPv4 and IPv6 peers.
+         int addrlen = sizeof(inaddr);
+         // @see https://github.com/Haivision/srt/blob/master/docs/API/API-functions.md#srt_accept
+         srs_srt_t srt_fd = srt_accept(srt_fd_, (sockaddr*)&inaddr, &addrlen);

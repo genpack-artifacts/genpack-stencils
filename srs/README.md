@@ -13,6 +13,8 @@ RTMP 取込・SRT 取込・HLS 出力に対応したストリーミングサー�
 ```
 srs/
   genpack.json5                              # packages / accept_keywords / use の断片
+  patches/
+    media-video/srs/srs-srt-ipv6-listen.patch  # SRT over IPv6 修正 (6.0 系不具合 3 件)
   files/
     build.d/srs-ipv6.sh                      # listen を dual-stack 化 (任意)
     usr/lib/systemd/system/srs.service       # systemd unit (公式は OpenRC のみのため自前)
@@ -26,7 +28,9 @@ srs/
    - システム ffmpeg が前提（`--sys-ffmpeg=on`）。対象に `media-video/ffmpeg` が無ければ追加する。
    - マージ箇所に `// ref: srs/genpack.json5` を残す。
 2. `files/usr/lib/systemd/system/srs.service` と `files/usr/lib/tmpfiles.d/srs.conf` をコピー。
-3. dual-stack で待ち受けたい場合は `files/build.d/srs-ipv6.sh` もコピー。
+3. SRT を IPv6 (dual-stack) で待ち受ける場合は `patches/media-video/srs/srs-srt-ipv6-listen.patch`
+   をアーティファクトの `patches/` へコピーし、`files/build.d/srs-ipv6.sh` もコピー。
+   （パッチは Lower フェーズで `/etc/portage/patches/` 経由で ebuild に適用される）
 4. 自動起動したい場合のみ `genpack.json5` に `services: ["srs"]` を追加。
    unit は同梱されるので、既定は起動せずインスタンスごとに `systemctl enable --now srs` も可。
 
@@ -43,22 +47,31 @@ srs/
 - **サービス管理は systemd unit を自前提供**。公式 ebuild は OpenRC の init.d/conf.d のみ同梱で、
   genpack は systemd ベースのため。
 
-## IPv6 (dual-stack) と SRT の制約
+## IPv6 (dual-stack) と SRT
 
-`srs-ipv6.sh` は `/etc/srs/srs.conf` の TCP リスナーを `listen [::]:<port>;` に書き換えて
-dual-stack 化します（RTMP 1935 / http_api 1985）。
+`srs-ipv6.sh` は `/etc/srs/srs.conf` の listen を `listen [::]:<port>;` に書き換えて
+dual-stack 化します（RTMP 1935 / http_api 1985 / SRT 10080）。
 
-**SRT(10080) は対象外**。SRS の `srt_server.listen` はポート番号（整数）のみを受け付ける仕様で、
-`[::]:10080` を与えると整数パースに失敗し port 0 → ランダムな ephemeral ポートを IPv4 で
-bind してしまう（実測で確認）。よって SRT は IPv4 の `listen 10080;` のまま残します。
-この listen 指定では SRT の IPv6 は実質非対応と割り切ってください。
+**SRT over IPv6 には `patches/media-video/srs/srs-srt-ipv6-listen.patch` が必要**。
+SRS 6.0 系には IPv6 関連の不具合が 3 つあり、パッチで修正する:
+
+1. `listen` 指令がポート番号を `atoi` で数値化するだけで `[::]:10080` 形式を解釈できない
+   （port 0 → ランダムな ephemeral ポートを IPv4 で bind してしまう）
+2. libsrt 1.5.4 は `::` へ bind する際 `SRTO_IPV6ONLY` の明示を要求する
+   （パッチは bind 前に 0 = dual-stack を設定）
+3. `SrsSrtSocket::accept` が `sockaddr_in`(16B) を渡しており、IPv6 ピアでは libsrt が
+   28B 書き込んでスタックを破損し接続が STALL する（受信は成功するのに再生が始まらない）。
+   `sockaddr_storage` へ変更
+
+検証済み: srs-6.0.184 + libsrt 1.5.4、OBS(obs-multi-rtmp) 配信 → IPv6 リッスン受信、
+VLC・ffplay 再生確認。upstream develop には 2・3 と同様の修正が入っている（1 は未修正）。
 
 適用後の期待状態（`netstat -apn | grep srs-media`）:
 
 ```
 tcp6  :::1935   LISTEN   srs-media   # RTMP (dual-stack, IPv4 も受かる)
 tcp6  :::1985   LISTEN   srs-media   # http_api (dual-stack)
-udp   0.0.0.0:10080      srs-media   # SRT (IPv4)
+udp6  :::10080  LISTEN   srs-media   # SRT (dual-stack)
 ```
 
 ## 取り込み済みアーティファクト
