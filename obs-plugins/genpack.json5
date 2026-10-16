@@ -2,10 +2,12 @@
 // OBS Studioと、Portageに存在しないプラグインをGitHubからインストールする
 // 依存: なし
 // 競合するキー: packages(media-video/obs-studio), use(media-video/obs-studio),
-//               accept_keywords(obs-studio関連), buildtime_packages(deb2targz)
+//               accept_keywords(obs-studio関連), buildtime_packages(deb2targz, dev-build/cmake)
 // 備考: Portageにあるプラグイン(obs-pipewire-audio-capture等)は通常のpackagesに追加すること。
 //       GitHubからインストールするプラグインは files/build.d/ 以下のスクリプトが担う。
 //       使用するスクリプトだけ build.d にコピーして取り込む。
+//       obs-multi-rtmp は配布バイナリのクラッシュバグ 2件へのパッチを埋め込んだ
+//       ローカルビルド方式 (ソースは commit 固定)。詳細はスクリプト冒頭コメント。
 {
   packages: [
     "media-video/obs-studio",
@@ -20,6 +22,7 @@
   ],
   buildtime_packages: [
     "app-arch/deb2targz", // for .deb-based plugin installation
+    "dev-build/cmake", // for obs-multi-rtmp local build (パッチ済みソースビルド)
   ],
   accept_keywords: {
     "media-video/obs-studio": null,
