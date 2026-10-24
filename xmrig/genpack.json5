@@ -4,5 +4,6 @@
 // 競合するキー: なし
 // 備考: xmrigはPortageパッケージではなくGitHubリリース(jammy向けビルド)を使用するため
 //       packagesへの追記は不要。インストール処理はすべて build.d スクリプトが担う。
+//       導入したバージョンは /.genpack/xmrig-version に記録される。
 {
 }
