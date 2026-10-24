@@ -17,6 +17,9 @@
 #   media-video/obs-studio のインストールにより Lower 層に存在する。
 # 注意: SRT で HEVC を選ぶには obs-studio の mpegts USE フラグ (新 mpegts 出力、
 #   "h264;hevc" 宣言) が必要。use(media-video/obs-studio) への追加を検討すること。
+# 注意: 上流の cmake は今も旧ロケーション (lib/obs-plugins, share/obs/obs-plugins) 前提の
+#   ため cmake --install は使わず、ビルド成果物を新ロケーションへ手動コピーする。
+#   gs_image_file API 非使用なので OBS 33.0 の libnsgif 1.0.0 変更の影響は受けない。
 set -e
 
 arch=$(uname -m)
@@ -208,8 +211,11 @@ cmake -S "$src" -B "$src/build" \
   -DCMAKE_CXX_STANDARD_REQUIRED=ON
 cmake --build "$src/build" -j"$(nproc)"
 
-mkdir -p /usr/lib64/obs-plugins /usr/share/obs/obs-plugins/obs-multi-rtmp
-cp "$src/build/obs-multi-rtmp.so" /usr/lib64/obs-plugins/
-cp -r "$src/build/rundir/RelWithDebInfo/obs-multi-rtmp/." /usr/share/obs/obs-plugins/obs-multi-rtmp/
+plugin_module_dir=/usr/lib64/obs-modules/plugins
+plugin_data_dir=/usr/share/obs/obs-modules/plugins/obs-multi-rtmp
+
+mkdir -p "$plugin_module_dir" "$plugin_data_dir"
+cp "$src/build/obs-multi-rtmp.so" "$plugin_module_dir"/
+cp -r "$src/build/rundir/RelWithDebInfo/obs-multi-rtmp/." "$plugin_data_dir"/
 
 rm -rf "$src" /tmp/obs-multi-rtmp.tar.gz "$patch_file"

@@ -8,6 +8,19 @@
 //       使用するスクリプトだけ build.d にコピーして取り込む。
 //       obs-multi-rtmp は配布バイナリのクラッシュバグ 2件へのパッチを埋め込んだ
 //       ローカルビルド方式 (ソースは commit 固定)。詳細はスクリプト冒頭コメント。
+// OBS 33.0 変更メモ:
+//   プラグイン読み込みが刷新され (上流 PR #13594)、一次プラグインは obs-modules/core、
+//   サードパーティは obs-modules/plugins へ移った。build.d は新ロケーション
+//     実体 /usr/lib64/obs-modules/plugins/<name>.so
+//     data /usr/share/obs/obs-modules/plugins/<name>/
+//   へ設置する (ユーザー導入は $XDG_DATA_HOME/obs-studio/plugins/<name>/{<name>.so,data/})。
+//   旧ロケーション (/usr/lib64/obs-plugins + /usr/share/obs/obs-plugins) は 34.0 で読まれなくなり
+//   33.0 では Plugin Manager に Legacy 表示が出る。
+//   Portage の media-plugins/* は 33.0 系でも -DLIB_OUT_DIR=/lib64/obs-plugins のままで
+//   旧ロケーション設置なので Legacy 扱いになる (上流方式への追従を待てない場合は自前で再ビルド)。
+//   libnsgif 1.0.0 更新で gs_image_file API が gs_image_file_ex へ置き換えられており、
+//   旧 API でビルドされたプラグイン (obs-composite-blur 1.5.2 等) は 33.0 で
+//   "undefined symbol: gs_image_file_init_texture" として読み込み失敗する。
 {
   packages: [
     "media-video/obs-studio",
