@@ -1,5 +1,5 @@
 // theme: opencode
-// opencode CLI (Bunでコンパイルされた単一実行ファイル) をGitHubリリースから
+// opencode CLI (Bunでコンパイルされた単一実行ファイル) をGitHubのv2系の最新安定版から
 // /usr/bin/opencode としてインストールし、システム全体の指示文
 // (/etc/opencode/AGENTS.md) を配置する
 // 依存: net-libs/nodejs (buildtimeのみ、デスクトップ版 opencode-desktop.sh を採用する場合)

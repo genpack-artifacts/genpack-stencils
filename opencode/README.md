@@ -1,6 +1,6 @@
 # theme: opencode
 
-opencode CLI を GitHub リリースから `/usr/bin/opencode` としてインストールするステンシルです。
+opencode CLI を GitHub の v2 系の最新安定版から `/usr/bin/opencode` としてインストールするステンシルです。
 GUIアーティファクトにはオプションでデスクトップ版（Electron）も入れることができます（後述）。
 
 Portage パッケージは存在せず、公式配布も deb/rpm ではありません（deb/rpm があるのは
@@ -77,10 +77,13 @@ opencode には `/etc/claude-code/CLAUDE.md` に相当する「システム全�
 
 ## バージョンについて
 
-`opencode.sh` は `get-github-download-url` で GitHub の最新リリースを引くため、
-バージョンの固定や更新作業は不要です。opencode はほぼ毎日（npm 上のバージョン数は
-1万を超える）リリースされるため、ビルドのたびに中身が変わり、アーティファクトの
-再現性は保証されません。
+両スクリプトは **v2 系の最新安定版**を追う。GitHub の `latest` ポインタは v2 公開後も
+v1 系に固定されている（2026-10-28 現在 v1.19.4 を指す）ため、`get-github-download-url`
+（latest 基準）では v2 に到達できない。両スクリプトは GitHub API の `/releases` を
+自前でページ巡回し、draft/prerelease でない `v2.*` タグの最新を取ります（JSON の解析には
+genpack/base で保証されている python を使う）。v2 タグが見つからなければビルドはエラーで
+停止します。opencode はほぼ毎日（npm 上のバージョン数は1万を超える）リリースされるため、
+ビルドのたびに中身が変わり、アーティファクトの再現性は保証されません（従来どおり）。
 
 ## デスクトップ版（Electron）
 
@@ -89,13 +92,19 @@ opencode には `/etc/claude-code/CLAUDE.md` に相当する「システム全�
 調べ、入っていればGUIアーティファクトとみなしてインストールし、無ければ何もしないで
 正常終了します。
 
-デスクトップ版は .deb でのみ配布されます（単一実行ファイル版は無い）。スクリプトは
-`opencode.sh` と同様に最新リリースを追い、.deb の payload (`data.tar.xz`) を
+デスクトップ版は deb / rpm / AppImage で配布されます（単一実行ファイル版は無い）。スクリプトは
+.deb を使い、`opencode.sh` と同様に v2 の最新リリースを追い、.deb の payload (`data.tar.xz`) を
 `ar`（stage3 標準の binutils）で取り出して、deb 内の構造のまま `/` に展開します：
 
-- `/opt/OpenCode/` — Electron アプリ本体（展開後 445 MiB）
-- `/usr/share/applications/opencode-desktop.desktop`、`/usr/share/icons/hicolor/`、
-  `/usr/share/metainfo/`
+- `/opt/OpenCode/` — Electron アプリ本体（v2.2.0 で展開後 741 MiB）。Linux 実行ファイルは
+  v2 で `ai.opencode`（v1 時点の `ai.opencode.desktop` からの改名。app id は
+  `ai.opencode.desktop` のまま）
+- `/usr/share/applications/opencode-desktop.desktop`（v2 では旧来エントリ
+  `ai.opencode.desktop.desktop` も同梱。Exec は両者とも `/opt/OpenCode/ai.opencode`）、
+  `/usr/share/icons/hicolor/`、`/usr/share/metainfo/`
+
+.deb は同梱の .desktop を Exec 含め自己整合の形で展開するため、実行ファイル改名に対する
+調整はスクリプト側に不要です。
 
 標準的な FHS レイアウトなのでパスの寄せ替えは不要です。ランタイム依存
 （.deb の宣言に従い libgtk-3-0、libnss3、libatspi2.0-0、libsecret-1-0 等）は
@@ -108,29 +117,35 @@ GNOME デスクトップなら揃っています。
 
 リリース版は Linux でも Electron の既定メニューを持ち、隠し状態ながら Alt キーで
 表示が切替わります。Alt+~ での IME 切替と競合するため、スクリプトは
-`resources/app.asar` 内の `out/main/index.js` の `createMenu()` を node スクリプトで
-パッチし、Linux では `Menu.setApplicationMenu(null)` を呼んでメニューを完全に取り除きます
+`resources/app.asar` 内のメニュー構築コードを node スクリプトでパッチし、Linux では
+`Menu.setApplicationMenu(null)` を呼んでメニューを完全に取り除きます
 （asar は header offset と SHA256 integrity を再計算して in-place 書き換え）。
 メニュー操作はウィンドウ内のタイトルバーメニューにそのまま残るので、機能的な影響は
 ありません。
 
-このパッチに `net-libs/nodejs` が必要ですが、ステンシルの `buildtime_packages`
-として指定するため Lower 専用で、最終イメージには残りません。リリースのレイアウトが
-変わり `createMenu()` のアンカーが見つからない場合や asar 構造が想定と異なる場合は
-パッチが失敗してビルドが止まります。その場合はパッチスクリプト（asar-patch.js）と
-アンカー文字列を新しいリリースに合わせて更新してください。
+v2 はメインプロセスが minify・code-split されるため、アンカーは固定の関数名
+（v1 までの `function createMenu()`）ではなく、`buildFromTemplate`…`setApplicationMenu`
+の近傍にある darwin 早期 return というパターンです。`out/main/` 配下の全 JS を走査し、
+一致はちょうど1回でなければならない（既にパッチ済みなら冪等にスキップ）。v2.2.0 での
+ patched 対象は `out/main/desktop-0AQYXex6.js`（184289 → 184349 bytes、実リリースで確認済み）。
 
-### イメージサイズへの影響（v1.18.21 実測）
+このパッチに `net-libs/nodejs` が必要ですが、ステンシルの `buildtime_packages`
+として指定するため Lower 専用で、最終イメージには残りません。アンカーのパターン一致が
+1回でなかったり asar 構造が想定と異なる場合はパッチが失敗してビルドが止まります。その場合は
+パッチスクリプト（asar-patch.js）とアンカーパターンを新しいリリースに合わせて更新してください。
+
+### イメージサイズへの影響（v2.2.0 実測）
 
 | | サイズ |
 |---|---|
-| .deb | 117 MiB (amd64) / 111 MiB (arm64) |
-| 展開ツリー (/opt + /usr/share) | 445 MiB |
-| squashfs 既定 (gzip -1) | **約 170 MiB** |
-| squashfs `--compression xz` | 約 110 MiB (推定) |
+| .deb | 231 MiB (amd64) / 222 MiB (arm64) |
+| 展開ツリー (/opt + /usr/share) | 741 MiB |
+| squashfs 既定 (gzip -1 / 128KiB ブロック) | **約 291 MiB** |
+| squashfs `--compression xz` (1MiB ブロック) | 約 230 MiB |
 
-イメージ増分は CLI（約 65MiB）の約2.6倍です。サイズの小さいイメージを維持したい場合は
-このスクリプトを取り込まないでください。
+デスクトップ版は v2 で大幅に重くなった（v1.18.21 実測: .deb 117 MiB、展開 445 MiB、
+gzip 約 170 MiB）。サイズの小さいイメージを維持したい場合はこのスクリプトを取り込まないで
+ください。
 
 ### 自動更新の挙動について
 
@@ -140,6 +155,9 @@ GNOME デスクトップなら揃っています。
 更新キャッシュが `$HOME` 配下に溜まる可能性があります。
 
 ## イメージサイズへの影響（CLI、v1.18.18 実測）
+
+v2.2.0 時点の tar.gz は 110 MiB（v2 でバイナリは小さくなっている）。下表は v1.18.18 の
+実測で、オーダーの目安として残している。
 
 | | サイズ |
 |---|---|
@@ -212,8 +230,9 @@ socat または `bash /dev/tcp` に誘導するシムを置いています。
 
 - **アーキ**: x86_64 / aarch64 のみ対応。それ以外はスキップして正常終了します。
 - **baseline ビルドは不要**: リリースには `opencode-linux-x64-baseline.tar.gz` もありますが、
-  v1.18.18 では中身の実行ファイルが通常版と **sha256 まで完全に一致** します
-  （tar.gz の digest が違うのは gzip/tar のメタデータ差のみ）。したがって現状は
+  v1.18.18・v2.2.0 いずれの時点でも中身の実行ファイルが通常版と **sha256 まで完全に一致**
+  します（v2.2.0: `x64` と `x64-baseline` は `6d597970…` で同一、musl 系も同様に同一。
+  tar.gz の digest が違うのは gzip/tar のメタデータ差のみ）。したがって現状は
   どちらを選んでも同じで、AVX2 の有無を気にする必要はありません。
   ただし将来分岐する可能性はあるので、古い CPU を対象にする場合は都度確認すること。
 - **ランタイム依存**: 動的リンクは libc / libm / libdl / libpthread のみ、要求 GLIBC は
